@@ -1,0 +1,133 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RaffleStatus {
+  DRAFT
+  ACTIVE
+  FINISHED
+  CANCELLED
+}
+
+enum RaffleNumberStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
+model Raffle {
+  id           String       @id @default(uuid())
+  title        String
+  description  String?
+  ticketPrice  Decimal      @db.Decimal(10, 2)
+  pixKey       String
+  totalNumbers Int          @default(100)
+  status       RaffleStatus @default(DRAFT)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  prizes   Prize[]
+  numbers  RaffleNumber[]
+  payments Payment[]
+  draws    Draw[]
+}
+
+model Prize {
+  id          String   @id @default(uuid())
+  raffleId    String
+  name        String
+  description String?
+  imageUrl    String?
+  position    Int      @default(1)
+  createdAt   DateTime @default(now())
+
+  raffle Raffle @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+}
+
+model Buyer {
+  id        String   @id @default(uuid())
+  name      String
+  whatsapp  String
+  email     String?
+  createdAt DateTime @default(now())
+
+  numbers  RaffleNumber[]
+  payments Payment[]
+}
+
+model RaffleNumber {
+  id         String             @id @default(uuid())
+  raffleId   String
+  number     Int
+  status     RaffleNumberStatus @default(AVAILABLE)
+  buyerId    String?
+  reservedAt DateTime?
+  soldAt     DateTime?
+  createdAt  DateTime           @default(now())
+
+  raffle         Raffle          @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+  buyer          Buyer?          @relation(fields: [buyerId], references: [id], onDelete: SetNull)
+  paymentNumbers PaymentNumber[]
+  winningDraws   Draw[]
+
+  @@unique([raffleId, number])
+}
+
+model Payment {
+  id          String        @id @default(uuid())
+  raffleId    String
+  buyerId     String
+  amount      Decimal       @db.Decimal(10, 2)
+  status      PaymentStatus @default(PENDING)
+  pixKey      String
+  receiptUrl  String?
+  notes       String?
+  confirmedAt DateTime?
+  createdAt   DateTime      @default(now())
+
+  raffle         Raffle          @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+  buyer          Buyer           @relation(fields: [buyerId], references: [id], onDelete: Restrict)
+  paymentNumbers PaymentNumber[]
+}
+
+model PaymentNumber {
+  paymentId      String
+  raffleNumberId String
+
+  payment      Payment      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  raffleNumber RaffleNumber @relation(fields: [raffleNumberId], references: [id], onDelete: Restrict)
+
+  @@id([paymentId, raffleNumberId])
+  @@unique([raffleNumberId])
+}
+
+model Draw {
+  id              String   @id @default(uuid())
+  raffleId        String
+  winningNumberId String
+  drawnBy         String?
+  drawnAt         DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  raffle        Raffle       @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+  winningNumber RaffleNumber @relation(fields: [winningNumberId], references: [id], onDelete: Restrict)
+
+  @@unique([raffleId])
+}

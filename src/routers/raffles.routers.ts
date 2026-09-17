@@ -199,7 +199,7 @@ export async function rafflesRoutes(server: FastifyInstance) {
         });
     });
 
-    server.get("/raffles/:raffleId", { preHandler: requireAdmin }, async (request, reply) => {
+    server.get("/raffles/:raffleId", async (request, reply) => {
 
         const paramsSchema = z.object({
             raffleId: z.string().uuid(),
@@ -265,9 +265,7 @@ export async function rafflesRoutes(server: FastifyInstance) {
         });
     });
 
-    server.patch(
-        "/raffles/:raffleId",
-        { preHandler: requireAdmin },
+    server.patch("/raffles/:raffleId",{ preHandler: requireAdmin },
         async (request, reply) => {
             const paramsSchema = z.object({
                 raffleId: z.string().uuid(),

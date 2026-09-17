@@ -17,7 +17,7 @@ const createPaymentSchema = z.object({
 
 export async function paymentsRoutes(server: FastifyInstance) {
 
-    server.post("/payments", { preHandler: requireAdmin }, async (request, reply) => {
+    server.post("/payments", async (request, reply) => {
         const data = createPaymentSchema.parse(request.body);
 
         const raffle = await prisma.raffle.findUnique({
@@ -61,6 +61,10 @@ export async function paymentsRoutes(server: FastifyInstance) {
                 data: data.buyer,
             });
 
+            if (!buyer) {
+                throw new AppError("Erro ao criar comprador.", 500);
+            }
+
             const createdPayment = await tx.payment.create({
                 data: {
                     raffleId: data.raffleId,
@@ -72,25 +76,25 @@ export async function paymentsRoutes(server: FastifyInstance) {
                 },
             });
 
-            for (const raffleNumber of raffleNumbers) {
-                await tx.raffleNumber.update({
-                    where: {
-                        id: raffleNumber.id,
+            await tx.raffleNumber.updateMany({
+                where: {
+                    id: {
+                        in: raffleNumbers.map((raffleNumber) => raffleNumber.id),
                     },
-                    data: {
-                        status: "RESERVED",
-                        buyerId: buyer.id,
-                        reservedAt: new Date(),
-                    },
-                });
+                },
+                data: {
+                    status: "RESERVED",
+                    buyerId: buyer.id,
+                    reservedAt: new Date(),
+                },
+            });
 
-                await tx.paymentNumber.create({
-                    data: {
-                        paymentId: createdPayment.id,
-                        raffleNumberId: raffleNumber.id,
-                    },
-                });
-            }
+            await tx.paymentNumber.createMany({
+                data: raffleNumbers.map((raffleNumber) => ({
+                    paymentId: createdPayment.id,
+                    raffleNumberId: raffleNumber.id,
+                })),
+            });
 
             return tx.payment.findUnique({
                 where: {
@@ -105,6 +109,9 @@ export async function paymentsRoutes(server: FastifyInstance) {
                     },
                 },
             });
+        }, {
+            maxWait: 10000,
+            timeout: 30000,
         });
 
         return reply.status(201).send({
@@ -186,14 +193,19 @@ export async function paymentsRoutes(server: FastifyInstance) {
     });
 
     server.get("/payments", { preHandler: requireAdmin }, async (request, reply) => {
+        
         const querySchema = z.object({
             status: z.enum(["PENDING", "CONFIRMED", "REJECTED"]).optional(),
+            raffleId: z.string().uuid().optional(),
         });
 
-        const { status } = querySchema.parse(request.query);
+        const { status, raffleId } = querySchema.parse(request.query);
 
         const payment = await prisma.payment.findMany({
-            where: status ? { status } : {},
+            where: {
+                status,
+                raffleId,
+            },
             orderBy: {
                 createdAt: "desc",
             },
@@ -217,6 +229,7 @@ export async function paymentsRoutes(server: FastifyInstance) {
         const payments = await prisma.payment.findMany({
             where: {
                 status,
+                raffleId,
             },
             orderBy: {
                 createdAt: "desc",
@@ -342,7 +355,7 @@ export async function paymentsRoutes(server: FastifyInstance) {
     );
 
     server.patch("/payments/:paymentId/receipt", async (request, reply) => {
-        
+
         const paramsSchema = z.object({
             paymentId: z.string().uuid(),
         });

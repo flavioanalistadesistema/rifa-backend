@@ -11,8 +11,12 @@ const uploadQuerySchema = z.object({
 
 export async function uploadsRoutes(server: FastifyInstance) {
 
-    server.post("/uploads", { preHandler: requireAdmin }, async (request, reply) => {
+    server.post("/uploads", async (request, reply) => {
         const { type } = uploadQuerySchema.parse(request.query);
+
+        if(type === "prize"){
+            await requireAdmin(request, reply);
+        }
 
         const file = await request.file();
 

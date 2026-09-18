@@ -1,23 +1,28 @@
-import Fastify from "fastify";
-import { rafflesRoutes } from "./routers/raffles.routers";
-import { paymentsRoutes } from "./routers/payments.routers";
-import { drawsRoutes } from "./routers/draws.routers";
-import { errorHandler } from "./erros/error-handler";
-import { prizesRoutes } from "./routers/prizes.routers";
-import { uploadsRoutes } from "./routers/uploads.routers";
-import Multipart  from "@fastify/multipart";
-import { authRoutes } from "./routers/auth.routers";
-import cors from "@fastify/cors";
+import "dotenv/config";
 
-const port = Number(process.env.PORT ?? 3333);
-const host = process.env.HOST ?? "0.0.0.0";
+import cors from "@fastify/cors";
+import Multipart from "@fastify/multipart";
+import Fastify from "fastify";
+
+import { errorHandler } from "./erros/error-handler";
+import { authRoutes } from "./routers/auth.routers";
+import { drawsRoutes } from "./routers/draws.routers";
+import { paymentsRoutes } from "./routers/payments.routers";
+import { prizesRoutes } from "./routers/prizes.routers";
+import { rafflesRoutes } from "./routers/raffles.routers";
+import { uploadsRoutes } from "./routers/uploads.routers";
 
 const server = Fastify({
-    logger: true,
+  logger: true,
 });
 
+const allowedOrigins = [
+  "http://localhost:5173",
+  process.env.FRONTEND_URL,
+].filter((origin): origin is string => Boolean(origin));
+
 server.register(cors, {
-    origin: "*",
+  origin: allowedOrigins,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
 });
 
@@ -27,18 +32,13 @@ server.register(Multipart, {
   },
 });
 
-server.get("/", async (request, reply) => {
-  return { hello: "world" };
-});
-
-server.register(rafflesRoutes);
-server.register(paymentsRoutes);
-server.register(drawsRoutes);
-server.register(prizesRoutes);
 server.setErrorHandler(errorHandler);
-server.register(uploadsRoutes);
-server.register(authRoutes);
 
+server.get("/", async () => {
+  return {
+    message: "Rifa API",
+  };
+});
 
 server.get("/health", async () => {
   return {
@@ -47,11 +47,26 @@ server.get("/health", async () => {
   };
 });
 
-server.listen({ port, host }, (error, address) => {
-  if (error) {
-    server.log.error(error);
-    process.exit(1);
-  }
+server.register(authRoutes);
+server.register(rafflesRoutes);
+server.register(paymentsRoutes);
+server.register(prizesRoutes);
+server.register(drawsRoutes);
+server.register(uploadsRoutes);
 
-  server.log.info(`Server listening at ${address}`);
-});
+const port = Number(process.env.PORT ?? 3333);
+
+server.listen(
+  {
+    port,
+    host: "::",
+  },
+  (error, address) => {
+    if (error) {
+      server.log.error(error);
+      process.exit(1);
+    }
+
+    server.log.info(`Server listening at ${address}`);
+  }
+);

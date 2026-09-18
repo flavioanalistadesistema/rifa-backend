@@ -9,6 +9,9 @@ import Multipart  from "@fastify/multipart";
 import { authRoutes } from "./routers/auth.routers";
 import cors from "@fastify/cors";
 
+const port = Number(process.env.PORT ?? 3333);
+const host = process.env.HOST ?? "0.0.0.0";
+
 const server = Fastify({
     logger: true,
 });
@@ -44,10 +47,11 @@ server.get("/health", async () => {
   };
 });
 
-server.listen({ port: 3333 }, (err, address) => {
-  if (err) {
-    console.error(err);
+server.listen({ port, host }, (error, address) => {
+  if (error) {
+    server.log.error(error);
     process.exit(1);
   }
-  console.log(`Server listening at ${address}`);
+
+  server.log.info(`Server listening at ${address}`);
 });

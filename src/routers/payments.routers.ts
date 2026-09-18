@@ -57,6 +57,26 @@ export async function paymentsRoutes(server: FastifyInstance) {
         }
 
         const payment = await prisma.$transaction(async (tx) => {
+            const reservedNumbers = await tx.raffleNumber.updateMany({
+                where: {
+                    id: {
+                        in: raffleNumbers.map((raffleNumber) => raffleNumber.id),
+                    },
+                    status: "AVAILABLE",
+                },
+                data: {
+                    status: "RESERVED",
+                    reservedAt: new Date(),
+                },
+            });
+
+            if (reservedNumbers.count !== raffleNumbers.length) {
+                throw new AppError(
+                    "Um ou mais números foram reservados por outra pessoa. Atualize a página e tente novamente.",
+                    409
+                );
+            }
+
             const buyer = await tx.buyer.create({
                 data: data.buyer,
             });
@@ -83,9 +103,18 @@ export async function paymentsRoutes(server: FastifyInstance) {
                     },
                 },
                 data: {
-                    status: "RESERVED",
                     buyerId: buyer.id,
-                    reservedAt: new Date(),
+                },
+            });
+
+            await tx.paymentNumber.deleteMany({
+                where: {
+                    raffleNumberId: {
+                        in: raffleNumbers.map((raffleNumber) => raffleNumber.id),
+                    },
+                    payment: {
+                        status: "REJECTED",
+                    },
                 },
             });
 
@@ -149,6 +178,30 @@ export async function paymentsRoutes(server: FastifyInstance) {
         }
 
         const confirmedPayment = await prisma.$transaction(async (tx) => {
+            const reservedNumberIds = payment.paymentNumbers.map(
+                (paymentNumber) => paymentNumber.raffleNumber.id
+            );
+
+            const updatedNumbers = await tx.raffleNumber.updateMany({
+                where: {
+                    id: {
+                        in: reservedNumberIds,
+                    },
+                    status: "RESERVED",
+                },
+                data: {
+                    status: "SOLD",
+                    soldAt: new Date(),
+                },
+            });
+
+            if (updatedNumbers.count !== reservedNumberIds.length) {
+                throw new AppError(
+                    "Um ou mais números não estão mais reservados para este pagamento.",
+                    409
+                );
+            }
+
             await tx.payment.update({
                 where: {
                     id: paymentId,
@@ -158,18 +211,6 @@ export async function paymentsRoutes(server: FastifyInstance) {
                     confirmedAt: new Date(),
                 },
             });
-
-            for (const paymentNumber of payment.paymentNumbers) {
-                await tx.raffleNumber.update({
-                    where: {
-                        id: paymentNumber.raffleNumber.id,
-                    },
-                    data: {
-                        status: "SOLD",
-                        soldAt: new Date(),
-                    },
-                });
-            }
 
             return tx.payment.findUnique({
                 where: {
@@ -184,6 +225,9 @@ export async function paymentsRoutes(server: FastifyInstance) {
                     },
                 },
             });
+        }, {
+            maxWait: 10000,
+            timeout: 30000,
         });
 
         return reply.send({
@@ -279,6 +323,12 @@ export async function paymentsRoutes(server: FastifyInstance) {
         }
 
         const rejectedPayment = await prisma.$transaction(async (tx) => {
+            await tx.paymentNumber.deleteMany({
+                where: {
+                    paymentId,
+                },
+            });
+
             await tx.payment.update({
                 where: {
                     id: paymentId,

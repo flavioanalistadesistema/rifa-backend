@@ -17,9 +17,14 @@ const server = Fastify({
 });
 
 const allowedOrigins = [
-  "http://localhost:5173",
+  "http://localhost:5173", 
+  "https://rifa-frontend-murex.vercel.app",
+  "https://rifa-frontend-git-main-flavioanalistadesistema-1388s-projects.vercel.app",
+  "https://rifa-frontend-b8qdslaxa-flavioanalistadesistema-1388s-projects.vercel.app",
   process.env.FRONTEND_URL,
-].filter((origin): origin is string => Boolean(origin));
+]
+  .filter((origin): origin is string => Boolean(origin))
+  .map((origin) => origin.replace(/\/$/, ""));
 
 server.register(cors, {
   origin: allowedOrigins,
